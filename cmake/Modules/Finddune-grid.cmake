@@ -48,7 +48,6 @@ int main (void) {
   # config variables
   "HAVE_MPI;
    HAVE_UG;
-   HAVE_DUNE_FEM;
    HAVE_GRIDTYPE;
    HAVE_GRAPE;
    HAVE_PSURFACE;
