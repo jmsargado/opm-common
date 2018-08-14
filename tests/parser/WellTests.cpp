@@ -346,6 +346,7 @@ inline Opm::Connection connection( int i, int j, int k, int complnum = 1 ) {
                             Opm::Value<double>("ConnectionTransmissibilityFactor",99.88),
                             Opm::Value<double>("D",22.33),
                             Opm::Value<double>("SKIN",33.22),
+                            Opm::Value<double>("Kh",17.29),
                             0,
                             Opm::WellCompletion::DirectionEnum::Z };
 }
@@ -761,6 +762,17 @@ namespace {
             return input;
         }
 
+        std::string whistctl() {
+            const std::string input =
+                "WHISTCTL\n"
+                "ORAT /\n"
+                "WCONHIST\n"
+                "-- 1    2     3    4-6  7  8  9  10\n"
+                "  'P' 'OPEN' 'RESV' 3*  3 10. 1* 500/\n/\n";
+
+            return input;
+        }
+
         Opm::WellProductionProperties properties(const std::string& input) {
             Opm::Parser parser;
 
@@ -770,7 +782,13 @@ namespace {
             prev_p.BHPLimit = 100.;
             prev_p.VFPTableNumber = 12;
             prev_p.ALQValue = 18.;
-            Opm::WellProductionProperties hist = Opm::WellProductionProperties::history(prev_p, record);;
+            Opm::WellProducer::ControlModeEnum whistctl_cmode = Opm::WellProducer::NONE;
+            if (deck.hasKeyword("WHISTCTL") ) {
+                const auto& whistctl_record = deck.getKeyword("WHISTCTL").getRecord(0);
+                const std::string& cmode_string = whistctl_record.getItem("CMODE").getTrimmedString(0);
+                whistctl_cmode = Opm::WellProducer::ControlModeFromString(cmode_string);
+            }
+            Opm::WellProductionProperties hist = Opm::WellProductionProperties::history(prev_p, record, whistctl_cmode);;
 
             return hist;
         }
@@ -935,6 +953,27 @@ BOOST_AUTO_TEST_CASE(WCH_Rates_NON_Defaulted_VFP)
     BOOST_CHECK(p.hasProductionControl(Opm::WellProducer::RESV));
 
     BOOST_CHECK_EQUAL(p.controlMode , Opm::WellProducer::RESV);
+
+    BOOST_CHECK_EQUAL(true, p.hasProductionControl(Opm::WellProducer::BHP));
+    BOOST_CHECK_EQUAL(p.VFPTableNumber, 3);
+    BOOST_CHECK_EQUAL(p.ALQValue, 10.);
+    BOOST_CHECK_EQUAL(p.BHPLimit, 100.);
+}
+
+BOOST_AUTO_TEST_CASE(WCH_Whistctl)
+{
+    const Opm::WellProductionProperties& p =
+        WCONHIST::properties(WCONHIST::whistctl());
+
+    // the original RESV contorl in WCONHIST should be overwritten by
+    // ORAT specified with WHISCTL now.
+    BOOST_CHECK( p.hasProductionControl(Opm::WellProducer::ORAT));
+    BOOST_CHECK( !p.hasProductionControl(Opm::WellProducer::WRAT));
+    BOOST_CHECK( !p.hasProductionControl(Opm::WellProducer::GRAT));
+    BOOST_CHECK( !p.hasProductionControl(Opm::WellProducer::LRAT));
+    BOOST_CHECK( !p.hasProductionControl(Opm::WellProducer::RESV));
+
+    BOOST_CHECK_EQUAL(p.controlMode , Opm::WellProducer::ORAT);
 
     BOOST_CHECK_EQUAL(true, p.hasProductionControl(Opm::WellProducer::BHP));
     BOOST_CHECK_EQUAL(p.VFPTableNumber, 3);
