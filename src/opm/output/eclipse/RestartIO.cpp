@@ -54,6 +54,18 @@ namespace RestartIO  {
 
 
 namespace {
+    /*
+      The RestartValue structure has an 'extra' container which can be used to
+      add extra fields to the restart file. The extra field is used both to add
+      OPM specific fields like 'OPMEXTRA', and eclipse standard fields like
+      THPRESPR. In the case of e.g. THPRESPR this should - if present - be added
+      in the SOLUTION section of the restart file. The std::set extra_solution
+      just enumerates the keys which should be in the solution section.
+    */
+
+    static const std::set<std::string> extra_solution = {"THPRESPR"};
+
+
 
     static const int NIWELZ = 11; //Number of data elements per well in IWEL array in restart file
     static const int NZWELZ = 3;  //Number of 8-character words per well in ZWEL array restart file
@@ -499,18 +511,27 @@ void writeHeader(ecl_rst_file_type * rst_file,
 
 
 
-  void writeSolution(ecl_rst_file_type* rst_file, const data::Solution& solution, bool write_double) {
-    ecl_rst_file_start_solution( rst_file );
-    for (const auto& elm: solution) {
-        if (elm.second.target == data::TargetType::RESTART_SOLUTION)
-            ecl_rst_file_add_kw( rst_file , ecl_kw(elm.first, elm.second.data, write_double).get());
-     }
-     ecl_rst_file_end_solution( rst_file );
+  void writeSolution(ecl_rst_file_type* rst_file, const RestartValue& value, bool write_double) {
+      ecl_rst_file_start_solution( rst_file );
+      for (const auto& elm: value.solution) {
+          if (elm.second.target == data::TargetType::RESTART_SOLUTION)
+              ecl_rst_file_add_kw( rst_file , ecl_kw(elm.first, elm.second.data, write_double).get());
+      }
+      for (const auto& elm: value.extra) {
+          const std::string& key = elm.first.key;
+          const std::vector<double>& data = elm.second;
+          if (extra_solution.find(key) != extra_solution.end())
+              /*
+                Observe that the extra data is unconditionally written in double precision.
+              */
+              ecl_rst_file_add_kw(rst_file, ecl_kw(key, data, true).get());
+      }
+      ecl_rst_file_end_solution( rst_file );
 
-     for (const auto& elm: solution) {
-        if (elm.second.target == data::TargetType::RESTART_AUXILIARY)
-            ecl_rst_file_add_kw( rst_file , ecl_kw(elm.first, elm.second.data, write_double).get());
-     }
+      for (const auto& elm: value.solution) {
+          if (elm.second.target == data::TargetType::RESTART_AUXILIARY)
+              ecl_rst_file_add_kw( rst_file , ecl_kw(elm.first, elm.second.data, write_double).get());
+      }
   }
 
 
@@ -518,7 +539,7 @@ void writeHeader(ecl_rst_file_type * rst_file,
     for (const auto& extra_value : extra_data) {
         const std::string& key = extra_value.first.key;
         const std::vector<double>& data = extra_value.second;
-        {
+        if (extra_solution.find(key) == extra_solution.end()) {
             ecl_kw_type * ecl_kw = ecl_kw_alloc_new_shared( key.c_str() , data.size() , ECL_DOUBLE , const_cast<double *>(data.data()));
             ecl_rst_file_add_kw( rst_file , ecl_kw);
             ecl_kw_free( ecl_kw );
@@ -559,13 +580,13 @@ void checkSaveArguments(const EclipseState& es,
       // If the the THPRES option is active the restart_value should have a
       // THPRES field. This is not enforced here because not all the opm
       // simulators have been updated to include the THPRES values.
-      if (!restart_value.hasExtra("THPRES")) {
+      if (!restart_value.hasExtra("THPRESPR")) {
           OpmLog::warning("This model has THPRES active - should have THPRES as part of restart data.");
           return;
       }
 
       size_t num_regions = es.getTableManager().getEqldims().getNumEquilRegions();
-      const auto& thpres = restart_value.getExtra("THPRES");
+      const auto& thpres = restart_value.getExtra("THPRESPR");
       if (thpres.size() != num_regions * num_regions)
           throw std::runtime_error("THPRES vector has invalid size - should have num_region * num_regions.");
   }
@@ -607,7 +628,7 @@ void save(const std::string& filename,
 
         writeHeader( rst_file.get(), sim_step, report_step, posix_time , sim_time, ert_phase_mask, units, schedule , grid );
         writeWell( rst_file.get(), sim_step, es , grid, schedule, value.wells);
-        writeSolution( rst_file.get(), value.solution, write_double );
+        writeSolution( rst_file.get(), value, write_double );
         writeExtraData( rst_file.get(), value.extra );
     }
 }

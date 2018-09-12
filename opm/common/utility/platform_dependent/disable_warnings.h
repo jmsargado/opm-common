@@ -76,6 +76,7 @@
 #pragma GCC diagnostic ignored "-Wcast-qual"
 #pragma GCC diagnostic ignored "-Wignored-attributes"
 #pragma GCC diagnostic ignored "-Wmisleading-indentation"
+#pragma GCC diagnostic ignored "-Wint-in-bool-context"
 #endif // COMPATIBLE_COMPILER
 
 #endif // SILENCE_EXTERNAL_WARNINGS
