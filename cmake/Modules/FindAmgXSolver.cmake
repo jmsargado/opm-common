@@ -54,8 +54,10 @@ if( AMGX_WRAPPER_LIBRARY )
   set(AMGXSOLVER_FOUND TRUE)
 endif()
 
-#set HAVE_AMGXSOLVER for config.h
-set(HAVE_AMGXSOLVER ${AMGXSOLVER_FOUND})
+if(AMGXSOLVER_FOUND)
+  #set HAVE_AMGXSOLVER to 1 for config.h
+  set(HAVE_AMGXSOLVER 1)
+endif()
 
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(AmgXSolver DEFAULT_MSG AMGXSOLVER_INCLUDE_DIRS AMGXSOLVER_LIBRARIES)
